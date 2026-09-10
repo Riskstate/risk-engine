@@ -5,9 +5,9 @@ license: Proprietary
 compatibility: Requires network access to api.riskstate.ai. Works with any agent that can make HTTP POST requests.
 metadata:
   author: RiskState
-  version: "1.4.0"
+  version: "1.4.1"
   homepage: "https://riskstate.ai"
-  repository: "https://github.com/likidodefi/riskstate-docs"
+  repository: "https://github.com/Riskstate/risk-engine"
 ---
 
 # RiskState — Pre-Trade Risk Layer for Crypto
