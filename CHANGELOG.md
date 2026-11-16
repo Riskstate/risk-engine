@@ -2,6 +2,34 @@
 
 All notable changes to the RiskState API will be documented in this file.
 
+## [1.5.0] - 2026-11-16
+
+Scoring version `score_v4`. Every `policy_hash` changes; hashes from 1.4.0 will not match.
+
+### Added
+- `trend_gate` — size is halved while price is below its 50-day average, or when daily candles are missing.
+- `rules_load` — active rules counted once per family, with the families that were excluded.
+- `sizing` and `exposure_policy.direction_advisory`.
+- `data_sources.supply` and `data_sources.longShortEth`.
+- `REDUCED_SIZE_ENTRY` in `allowed_actions` at level 2.
+
+### Changed
+- **Smaller `max_size_fraction` in downtrends**, from the trend gate.
+- **The DeFi cap is a hard limit.** An unusable health factor on a wallet with debt closes size.
+- **Level 2 is `DEFENSIVE`, not a block.** New positions are allowed up to `max_size_fraction`, without leverage. `WAIT` and `SCALP_SMALL` are no longer emitted at that level. Only level 1 means no new positions. Level boundaries are unchanged.
+- **`risk_flags.structural_blockers` is context, not a stop signal.** Gate new entries on `blocked_actions` (`NEW_TRADES`) and `max_size_fraction`. The field is unchanged.
+- **Long/short crowding is relative.** The rule and `positioning.ls_crowding` rank the ratio within its own last 30 days. Expect `BALANCED` far more often.
+- **`direction_bias` is advisory and `NEUTRAL` by default.**
+- MVRV is counted once; extreme Fear & Greed and macro conditions no longer add to the rules cap, because their own caps already count them.
+- ETH reads its own liquidation and CVD series.
+- Any non-finite input closes size.
+
+### Removed
+- `policy_permissions.target_size_fraction_raw`.
+
+### v2
+- `/v2/portfolio-risk-state` and `/v2/stress-scenario` are `2.0.0` (stable). The size cap is tested on the asset's net exposure, and a hedge is not blocked by a side-specific structural blocker.
+
 ## [1.4.0] - 2026-04-22
 
 ### Added

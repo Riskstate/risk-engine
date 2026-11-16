@@ -108,7 +108,11 @@ Three blocks: **Permissioning**, **Classification**, **Auditability**.
 | `exposure_policy.max_size_fraction` | float (0–1) | Maximum position size as fraction of portfolio |
 | `exposure_policy.leverage_allowed` | boolean | Whether leverage is permitted |
 | `exposure_policy.max_leverage` | string | Maximum leverage for DeFi borrowing (`"0x"`, `"1x"`, `"1.5x"`, `"2x"`). For perps, use `max_size_fraction` as notional cap instead. |
-| `exposure_policy.direction_bias` | string | `"LONG_PREFERRED"`, `"SHORT_PREFERRED"`, or `"NEUTRAL"` |
+| `exposure_policy.direction_bias` | string | `"LONG_PREFERRED"`, `"SHORT_PREFERRED"`, or `"NEUTRAL"`. **Advisory** — context for a trade the caller already wants to make, not a signal. `NEUTRAL` is the default (see below). |
+| `exposure_policy.direction_advisory` | boolean | Always `true` since v1.5.0. |
+| `trend_gate.state` | string | `ABOVE`, `BELOW` or `UNKNOWN` — price against the mean of its last 50 daily closes. |
+| `trend_gate.multiplier` | float | `1.0` when `ABOVE`; `0.5` when `BELOW` or `UNKNOWN`. Already applied to `max_size_fraction`. |
+| `trend_gate.sma`, `trend_gate.distance_pct` | float\|null | The 50-day mean and the distance of price from it, in %. |
 | `exposure_policy.reduce_recommended` | boolean | Agent should reduce exposure |
 | `exposure_policy.allowed_actions` | string[] | Actions the agent MAY take (enum tokens, see reference below) |
 | `exposure_policy.blocked_actions` | string[] | Actions the agent MUST NOT take (enum tokens, see reference below) |
@@ -122,7 +126,7 @@ Three blocks: **Permissioning**, **Classification**, **Auditability**.
 | `macro_state` | string | RISK-ON, NEUTRAL, RISK-OFF | Macro regime from FRED data |
 | `market_regime` | string | PANIC, EUPHORIA, SQUEEZE, TREND, RANGE | 5-state unified market regime |
 | `volatility_regime` | string | LOW, NORMAL, HIGH, EXTREME | Volatility classification |
-| `policy_level` | int | 1–5 | Informational classification. The `exposure_policy` fields are the binding constraints. 1=BLOCK Survival, 2=BLOCK Defensive, 3=CAUTIOUS, 4=GREEN Selective, 5=GREEN Expansion |
+| `policy_level` | int | 1–5 | Informational classification. The `exposure_policy` fields are the binding constraints. 1=BLOCK Survival, 2=DEFENSIVE Reduced size, 3=CAUTIOUS, 4=GREEN Selective, 5=GREEN Expansion |
 | `confidence_score` | float (0–1) | Signal agreement × data quality | Measures subscore agreement and data integrity. NOT a probability of market prediction accuracy. Higher = signals agree more and data is fresher. |
 | `data_quality_score` | int (0–100) | % of data sources live | Percentage of data sources reporting live data. Different scale from `confidence_score` (0–1 factor). <70 = degraded, <50 = unreliable |
 
@@ -134,7 +138,7 @@ Three blocks: **Permissioning**, **Classification**, **Auditability**.
 | `binding_constraint.reason` | string | Human-readable explanation (e.g., `"RISK-OFF × NORMAL"`) |
 | `binding_constraint.reason_codes` | string[] | Machine-parseable reason tokens (e.g., `["MACRO_RISK_OFF", "COUPLING_NORMAL"]`) |
 | `binding_constraint.cap_value` | float | The binding cap's value (0–1) |
-| `risk_flags.structural_blockers` | string[] | Hard blockers — agent MUST pause new entries |
+| `risk_flags.structural_blockers` | string[] | Adverse structural conditions the engine sees. Context, not a stop signal: what is binding is already in `blocked_actions` and `max_size_fraction`. `DEFI_LIQUIDATION_RISK` and `SQUEEZE_RISK` carry their own instruction (see below). |
 | `risk_flags.context_risks` | string[] | Soft risks — agent should reduce conviction |
 | `defi` | object\|null | DeFi position data if wallet provided, else `null`. See fields below. |
 | `defi.health_factor` | float | Current health factor (>1 = safe, <1.1 = danger) |
@@ -157,6 +161,18 @@ Three blocks: **Permissioning**, **Classification**, **Auditability**.
 | `key_type` | string | `"owner"` or `"external"` — identifies which auth tier was used |
 | `stale_fields` | string[] | Core signals that are missing or stale |
 
+## How `max_size_fraction` is built (v1.5.0, `score_v4`)
+
+1. Four caps, each 0–1: rules, DeFi, macro, cycle.
+2. A weighted geometric mean of the four (the smallest carries half the weight).
+3. **The DeFi cap is a hard limit**: the result never exceeds it. A health factor that cannot be read on a wallet with debt sets it to 0.
+4. Multiplied by the volatility multiplier, the **trend gate** multiplier and the quality factor.
+5. Two overrides: a panic floor of 0.10 (only when data is complete and neither the rules nor the DeFi cap is at its floor) and a euphoria ceiling of 0.10.
+
+Any step that does not produce a finite number yields `max_size_fraction: 0` and `policy_level: 1`.
+
+RiskState does not forecast returns. `max_size_fraction` limits exposure; it does not say a trade will be profitable.
+
 ## Response — Detailed (`include_details=true`)
 
 All minimal fields plus:
@@ -169,9 +185,11 @@ All minimal fields plus:
 | `caps.cycle` | float | Cycle phase cap (0–1) |
 | `caps.quality` | float | Quality factor (conflict × integrity) |
 | `caps.data_integrity` | float | Data freshness score |
+| `rules_load` | object | `{ load, defi_critical, families, excluded }` — the rules cap input. One contribution per rule family (the heaviest alert). Rules with `risk_to: "SHORT"` are reported but not counted. `excluded` lists families already counted elsewhere. |
+| `sizing` | object | `{ base_cap, hard_cap, vol_mult, trend_mult, pre_override, override }` — the steps from the four caps to `max_size_fraction`. `override` is `PANIC_FLOOR`, `EUPHORIA_CEILING` or `null`. |
 | `positioning.squeeze_direction` | string | UPSIDE, DOWNSIDE, TWO-SIDED, NONE |
 | `positioning.squeeze_confidence` | int | 0–100 |
-| `positioning.ls_crowding` | string | LONG_CROWDED, SHORT_CROWDED, BALANCED, etc. |
+| `positioning.ls_crowding` | string | LONG_CROWDED, LONG_LEANING, BALANCED, SHORT_LEANING, SHORT_CROWDED. Since v1.5.0 the label ranks the ratio within its own last 30 days; `BALANCED` when that history is too short. |
 | `positioning.ls_crowding_score` | int | 0–100 |
 | `positioning.funding_percentile` | int | Funding rate percentile vs 30d (0–100) |
 | `positioning.oi_zscore` | float | OI z-score vs 30d |
@@ -278,11 +296,11 @@ All other fields (RSI, daily klines, L/S ratio, CVD, ETF, exchange flow, macro, 
 | `REDUCE` | Reduce existing exposure | 1 |
 | `ADD_COLLATERAL` | Add collateral to DeFi position | 1 |
 | `HEDGE` | Hedge existing positions | 1, 2 |
-| `WAIT` | Wait for better conditions | 2, 3 |
+| `WAIT` | Wait for better conditions | 3 |
 | `REDUCE_LEVERAGE` | Reduce leverage on existing positions | 2 |
-| `SCALP_SMALL` | Small scalp trades only | 2 |
+| `REDUCED_SIZE_ENTRY` | New positions allowed up to `max_size_fraction`, without leverage (since v1.5.0) | 2 |
 | `RR_GT_2` | Trades with R:R > 2:1 only | 2, 3 |
-| `DCA` | Dollar-cost averaging | 3, 4 |
+| `DCA` | Dollar-cost averaging | 2, 3, 4 |
 | `LIGHT_ACCUMULATION` | Light spot accumulation | 3 |
 | `LONG_SHORT_CONFIRMED` | Long or short with confirmation signals | 4 |
 | `LEVERAGE_MODERATE` | Moderate leverage (up to 1.5x) | 4 |
@@ -316,7 +334,9 @@ All other fields (RSI, daily klines, L/S ratio, CVD, ETF, exchange flow, macro, 
 
 ## Risk Flags Reference
 
-### Structural Blockers (agent MUST pause)
+### Structural Blockers (severe conditions — context)
+
+These name the severe conditions the engine sees. They are not a stop signal by themselves: gate new entries on `blocked_actions` and `max_size_fraction`. Exceptions with their own instruction: `DEFI_LIQUIDATION_RISK` (reduce the position) and `SQUEEZE_RISK` (no leverage).
 
 | Flag | Meaning |
 |------|---------|
@@ -365,15 +385,15 @@ You are buying or selling the asset on a spot exchange (Coinbase, Binance Spot, 
 
 **Key fields:**
 - `max_size_fraction` → **% of portfolio to deploy.** If 0.33, allocate up to 33% of your portfolio to this position.
-- `direction_bias` → `LONG_PREFERRED` means "buy signal." `SHORT_PREFERRED` means "don't buy / consider selling." `NEUTRAL` means "no directional edge."
-- `structural_blockers` → If non-empty, do not buy.
+- `direction_bias` → advisory. `LONG_PREFERRED` means the short-term and structural readings agree on the long side and the move is not already extended; `SHORT_PREFERRED` is the mirror. `NEUTRAL` (the usual value) means they do not agree. It is not a buy or sell signal.
+- `blocked_actions` → If it contains `NEW_TRADES`, do not buy. `structural_blockers` is context: it explains the conditions behind the limit.
 - `allowed_actions` / `blocked_actions` → Filter for relevant actions (DCA, WAIT, LIGHT_ACCUMULATION).
 
 **Ignore for spot:** `max_leverage`, `leverage_allowed`, and leverage-related blocked actions (`LEVERAGE_GT_1X`, `LEVERAGE_GT_2X`). These apply to leveraged markets and DeFi borrowing.
 
 **Pre-trade workflow:**
 1. Call the API with `{"asset": "BTC"}`
-2. Check `structural_blockers` — if non-empty, do not enter
+2. Check `blocked_actions` — if it contains `NEW_TRADES`, do not enter
 3. Read `max_size_fraction` — this is your max allocation
 4. Check `direction_bias` — respect the directional guidance
 5. Proceed to your exchange and place the spot order
@@ -384,7 +404,7 @@ You are trading BTC/USDT or ETH/USDT perpetuals on Binance Futures, Hyperliquid,
 
 **Key fields:**
 - `max_size_fraction` → **Max notional exposure as % of portfolio.** If 0.33 and your portfolio is $100K, your max notional is $33K. At 10x leverage, that means max $3.3K margin.
-- `direction_bias` → Directly actionable: `LONG_PREFERRED` favors longs, `SHORT_PREFERRED` favors shorts.
+- `direction_bias` → advisory. Do not open a position because of it; use it to decline a trade that goes against it.
 - `structural_blockers` → If `SQUEEZE_RISK` is present, **do not open leveraged positions** — liquidation risk is elevated.
 
 **Especially relevant for perps (in detailed response):**
@@ -485,8 +505,8 @@ Where `conviction` is your own confidence factor (0–1), whether human or algor
      -H "Authorization: Bearer $RISKSTATE_API_KEY" \
      -H "Content-Type: application/json" \
      -d '{"asset": "BTC"}'
-2. If structural_blockers non-empty → ABORT new entries
-3. If blocked_actions contains NEW_TRADES → ABORT new entries
+2. If blocked_actions contains NEW_TRADES → ABORT new entries
+3. Read structural_blockers as context (it is not a stop signal)
 4. If reduce_recommended → reduce exposure (not necessarily close all)
 5. Size position: max_size_fraction × agent_conviction
 6. Respect max_leverage limit
@@ -507,3 +527,15 @@ curl -X POST https://api.riskstate.ai/v1/risk-state \
 
 The `defi` field will contain `health_factor` and `ltv` from Spark Protocol or Aave V3.
 If `binding_constraint.source === "DEFI"`, the DeFi position is the limiting factor.
+
+## Changelog
+
+### v1.5.0 — `score_v4`
+
+- **Sizing.** DeFi cap is now a hard limit. New trend gate halves size while price is below its 50-day average. Rules are counted once per family and by severity. Expect smaller `max_size_fraction` in downtrends than under v1.4.0.
+- **`direction_bias`** is advisory and `NEUTRAL` unless short-term and structural readings agree. `direction_layer` values are now `neutral_default`, `agreement`, `structural_downgrade`.
+- **New fields:** `trend_gate`, `exposure_policy.direction_advisory`; with `include_details`: `rules_load`, `sizing`.
+- **`policy_hash`** covers the four caps, the trend gate state, the rules load and quality. Hashes from v1.4.0 do not match.
+- **Fixed:** funding thresholds are now evaluated in the unit they were calibrated in (the funding rules could not trigger before). Response funding fields keep their unit (rate per 8h as a fraction).
+- **Removed:** `policy_permissions.target_size_fraction_raw` (returned with `include_details`). It was a non-binding experimental size equal to `risk_permission_score / 100`; it is not a sizing recommendation. Use `exposure_policy.max_size_fraction`.
+- **Unchanged:** request shape, field names and units of every other existing field, action enums, policy level boundaries.

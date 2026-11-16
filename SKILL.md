@@ -58,12 +58,14 @@ Authorization: Bearer $RISKSTATE_API_KEY
 
 When consuming the response, agents MUST evaluate fields in this order:
 
-1. `risk_flags.structural_blockers` — if non-empty, ABORT new entries
-2. `exposure_policy.blocked_actions` — actions the agent MUST NOT take
+1. `exposure_policy.blocked_actions` — actions the agent MUST NOT take. If it contains `NEW_TRADES`, ABORT new entries
+2. `risk_flags.structural_blockers` — context for the decision, not a stop signal (see below)
 3. `exposure_policy.reduce_recommended` — reduce exposure if true
 4. `exposure_policy.max_size_fraction` — maximum position size
 5. `exposure_policy.max_leverage` — maximum leverage allowed
-6. `exposure_policy.direction_bias` — preferred trade direction
+6. `exposure_policy.direction_bias` — advisory direction context (`NEUTRAL` by default; not a signal)
+
+`risk_flags.structural_blockers` is context, not a stop signal: it names the adverse conditions the engine sees (for example `EXTREME_FEAR` or `ETF_OUTFLOW`). What the engine treats as binding is already in `blocked_actions` and `max_size_fraction`. Two flags carry their own instruction: `DEFI_LIQUIDATION_RISK` (reduce the position) and `SQUEEZE_RISK` (no leverage).
 7. `policy_level` — informational summary only, do not use for enforcement
 
 ## Decision rules by policy level
@@ -71,7 +73,7 @@ When consuming the response, agents MUST evaluate fields in this order:
 | `policy_level` | Summary | Key constraints |
 |----------------|---------|-----------------|
 | 1 (BLOCK Survival) | No new positions | `blocked_actions: [NEW_TRADES, ...]`, `max_leverage: "0x"` |
-| 2 (BLOCK Defensive) | Wait or hedge only | `blocked_actions: [AGGRESSIVE_LONG, ...]`, `max_leverage: "1x"` |
+| 2 (DEFENSIVE) | New positions up to `max_size_fraction`, no leverage | `allowed_actions: [REDUCED_SIZE_ENTRY, DCA, ...]`, `blocked_actions: [LEVERAGE_GT_1X, AGGRESSIVE_LONG, ...]`, `max_leverage: "1x"` |
 | 3 (CAUTIOUS) | DCA with R:R >2:1 | `blocked_actions: [LEVERAGE, ALL_IN, ...]`, `max_leverage: "1x"` |
 | 4 (GREEN Selective) | Trade with confirmation | `max_leverage: "1.5x"` |
 | 5 (GREEN Expansion) | Full operations | `max_leverage: "2x"` |

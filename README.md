@@ -56,7 +56,7 @@ curl -X POST https://api.riskstate.ai/v1/risk-state \
 }
 ```
 
-Read `max_size_fraction`, check `structural_blockers`, and act. No parsing. No interpretation.
+Read `max_size_fraction`, check `blocked_actions`, and act. No parsing. No interpretation.
 
 ## Why?
 
@@ -68,7 +68,7 @@ Whether you run an AI trading agent, a systematic trading system, or a manual de
 | No awareness of macro regime | `RISK-OFF` → `blocked_actions: ["AGGRESSIVE_LONG"]` |
 | DeFi health factor ignored | Wallet health feeds directly into position limit |
 | Leverage unbounded | Policy-level constraints enforced |
-| No circuit breaker | `structural_blockers` non-empty → halt |
+| No circuit breaker | `blocked_actions` contains `NEW_TRADES` → halt |
 
 ## Quick Start
 
@@ -98,8 +98,8 @@ policy = requests.post(
     json={"asset": "BTC"}
 ).json()
 
-# Hard stop: structural blockers
-if policy["risk_flags"]["structural_blockers"]:
+# Hard stop: the engine blocks new trades
+if "NEW_TRADES" in policy["exposure_policy"]["blocked_actions"]:
     return  # Do not trade
 
 # Size cap — max notional exposure as fraction of portfolio
@@ -117,8 +117,8 @@ if "LEVERAGE" in policy["exposure_policy"]["blocked_actions"]:
 # Before placing a spot or perps order
 policy = fetch_riskstate("ETH")
 
-if policy["risk_flags"]["structural_blockers"]:
-    log("BLOCKED: structural risk — skipping order")
+if "NEW_TRADES" in policy["exposure_policy"]["blocked_actions"]:
+    log("BLOCKED: new trades not permitted — skipping order")
     return
 
 max_notional = portfolio_value * policy["exposure_policy"]["max_size_fraction"]
@@ -147,7 +147,7 @@ curl -s -X POST https://api.riskstate.ai/v1/risk-state \
 | Level | Label | Max Size | What your agent can do |
 |-------|-------|----------|----------------------|
 | 1 | BLOCK Survival | <15% | Reduce exposure, hedge only |
-| 2 | BLOCK Defensive | <35% | Wait, hedge, small scalps |
+| 2 | DEFENSIVE | <35% | New positions at reduced size, no leverage |
 | 3 | CAUTIOUS | <60% | DCA, R:R >2:1 only |
 | 4 | GREEN Selective | <80% | Trade with confirmation |
 | 5 | GREEN Expansion | ≥80% | Full operations, leverage up to 2x |
@@ -201,8 +201,8 @@ One tool: `get_risk_policy` — same parameters as the REST API. Compatible with
 
 When consuming the response, agents **must** evaluate fields in this order:
 
-1. `risk_flags.structural_blockers` — if non-empty, **abort** new entries
-2. `exposure_policy.blocked_actions` — actions the agent must not take
+1. `exposure_policy.blocked_actions` — actions the agent must not take. If it contains `NEW_TRADES`, **abort** new entries
+2. `risk_flags.structural_blockers` — context for the decision, not a stop signal: it names the adverse conditions the engine sees; what is binding is already in `blocked_actions` and `max_size_fraction`
 3. `exposure_policy.reduce_recommended` — reduce exposure if `true`
 4. `exposure_policy.max_size_fraction` — maximum position size (0.0–1.0)
 5. `exposure_policy.max_leverage` — maximum leverage allowed
