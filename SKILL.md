@@ -119,6 +119,8 @@ curl -X POST https://api.riskstate.ai/v1/risk-state \
 
 ### DeFi monitoring (with wallet)
 
+**Privacy:** `wallet` is optional. When you send it, the address goes to RiskState and on to Alchemy (our RPC provider) to read the on-chain position. It is not stored: the audit log keeps only a `has_wallet` flag, and wallet responses are not written to the shared cache. An address is a linkable identifier, so omit it unless you need DeFi-aware caps.
+
 ```bash
 curl -X POST https://api.riskstate.ai/v1/risk-state \
   -H "Authorization: Bearer $RISKSTATE_API_KEY" \

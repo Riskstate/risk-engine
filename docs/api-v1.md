@@ -47,7 +47,7 @@ The endpoint **fails closed**: if the server secret is not configured, all reque
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `asset` | string | `"BTC"` | Asset to evaluate. `"BTC"` or `"ETH"`. |
-| `wallet` | string | `null` | Ethereum wallet address (0x...) for DeFi position data. Optional. |
+| `wallet` | string | `null` | Ethereum wallet address (0x...) for DeFi position data. Optional. Forwarded to our RPC provider (Alchemy) for the lookup and not stored; see the privacy note below. |
 | `protocol` | string | `"spark"` | DeFi lending protocol. `"spark"` or `"aave"`. Only used when `wallet` is provided. |
 | `include_details` | boolean | `false` | Include expanded scoring details in response. |
 | `reference_time` | number | `now` | Unix seconds. Pins `daysSinceHalving` and the policy hash to a single timestamp, enabling bit-exact reproducibility. Must be in `[halving, now+1d]`. |
@@ -74,6 +74,8 @@ curl -X POST https://api.riskstate.ai/v1/risk-state \
 ```
 
 **DeFi monitoring (with wallet + Aave):**
+
+**Privacy:** `wallet` is optional. When you send it, the address goes to RiskState and on to Alchemy (our RPC provider) to read the on-chain position. It is not stored: the audit log keeps only a `has_wallet` flag, and wallet responses are not written to the shared cache. An address is a linkable identifier, so omit it unless you need DeFi-aware caps.
 
 ```bash
 curl -X POST https://api.riskstate.ai/v1/risk-state \

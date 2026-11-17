@@ -81,7 +81,7 @@ Scoring version `score_v4`. Every `policy_hash` changes; hashes from 1.4.0 will 
 ## [1.1.1] - 2026-03-16
 
 ### Added
-- **English standardization** — All API responses in English (was mixed Spanish/English)
+- **Consistent response language** — response strings that were still in Spanish are now in English, like the rest of the API
 - **ETH Structural Score v2.2** — Widened issuance bands, lending heat directional scoring, hard/soft downgrade reclassification
 - **Weighted warnings in rules cap** — Structural warnings (slow-moving) penalize 0.5x vs tactical 1.0x
 

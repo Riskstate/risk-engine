@@ -167,7 +167,7 @@ RiskState evaluates the same underlying market conditions regardless of where yo
 |--------|----------------------|
 | **Spot** | `max_size_fraction` = % of portfolio to deploy. Leverage fields are not applicable. |
 | **Perpetual futures (perps)** | `max_size_fraction` = max notional exposure as % of portfolio. At 10x leverage, your margin is `max_size_fraction / 10`. Derivatives signals (funding rate, basis, OI, squeeze risk) are especially relevant. |
-| **DeFi borrowing** | Pass your `wallet` address for health factor and liquidation-aware risk caps. `max_leverage` reflects borrowing ratio (LTV). |
+| **DeFi borrowing** | Pass your `wallet` address for health factor and liquidation-aware risk caps. `max_leverage` reflects borrowing ratio (LTV). The address is optional, is forwarded to our RPC provider for the lookup and is not stored. |
 
 The API returns the same response for all markets — the difference is how you **interpret** the output. See [API Reference → How to Use by Context](docs/api-v1.md#how-to-use-by-context) for detailed workflows.
 
@@ -182,12 +182,12 @@ Drop [`SKILL.md`](SKILL.md) into your agent's repo. Compatible with Claude Code,
 ### MCP Server
 
 ```bash
-npm install @riskstate/mcp-server
+npm install @riskstate/mcp-server@1.1.0
 ```
 
-Or run directly with `npx @riskstate/mcp-server`. Docker: `ghcr.io/riskstate/mcp`.
+Or run directly with `npx -p @riskstate/mcp-server@1.1.0 riskstate-mcp`. Pin the version; review the changelog before upgrading.
 
-One tool: `get_risk_policy` — same parameters as the REST API. Compatible with Claude Desktop, Claude Code, Cursor, and any MCP-compatible client. See [MCP README](https://riskstate.ai/docs/mcp) for full setup.
+Four read-only tools: `get_risk_policy` (same parameters as the REST API), `get_market_structure`, `get_playbook_status` and `check_trade`. Compatible with Claude Desktop, Claude Code, Cursor, and any MCP-compatible client. See [MCP README](https://riskstate.ai/docs/mcp) for full setup.
 
 ## Listed On
 
