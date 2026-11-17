@@ -1,6 +1,6 @@
 ---
 name: riskstate
-version: 1.4.1
+version: 1.5.0
 description: Pre-trade risk API for crypto trading agents. Returns exposure limits, allowed actions, and policy constraints for BTC/USD and ETH/USD from 30+ real-time signals. Spot, perpetual futures (perps), and DeFi borrowing aware.
 category: risk-management
 auth: bearer-token
@@ -27,7 +27,7 @@ A deterministic policy engine computes how much exposure is allowed based on 30+
 The response tells you:
 - **max_size_fraction**: Maximum exposure as fraction of portfolio (0.0–1.0). For spot: amount to deploy. For perps: max notional exposure (divide by your leverage for margin).
 - **allowed_actions / blocked_actions**: What MAY and MUST NOT be done (enum tokens)
-- **risk_flags**: Structural blockers (hard stop) vs contextual risks (reduce conviction)
+- **risk_flags**: Adverse conditions the engine sees (context; the binding limits are in `blocked_actions` and `max_size_fraction`)
 - **binding_constraint**: Which cap is limiting and why
 - **policy_level**: 1–5 summary label (informational — use `exposure_policy` for enforcement)
 
@@ -64,9 +64,9 @@ When consuming the response, agents MUST evaluate fields in this order:
 4. `exposure_policy.max_size_fraction` — maximum position size
 5. `exposure_policy.max_leverage` — maximum leverage allowed
 6. `exposure_policy.direction_bias` — advisory direction context (`NEUTRAL` by default; not a signal)
+7. `policy_level` — informational summary only, do not use for enforcement
 
 `risk_flags.structural_blockers` is context, not a stop signal: it names the adverse conditions the engine sees (for example `EXTREME_FEAR` or `ETF_OUTFLOW`). What the engine treats as binding is already in `blocked_actions` and `max_size_fraction`. Two flags carry their own instruction: `DEFI_LIQUIDATION_RISK` (reduce the position) and `SQUEEZE_RISK` (no leverage).
-7. `policy_level` — informational summary only, do not use for enforcement
 
 ## Decision rules by policy level
 
